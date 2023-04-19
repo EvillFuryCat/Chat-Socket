@@ -1,28 +1,72 @@
-from calendar import c
 import socket
-from threading import Thread, active_count
+import json
+import threading
+import datetime
 
-HOST = "127.0.0.1"
-PORT = 12345
-clients = []
+class ChatServer:
+    def __init__(self, host, port) -> None:
+        self.host = host
+        self.port = port
+        self.clients = []
+        self.names = {}
+        self.lock = threading.Lock()
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind((self.host, self.port))
+        self.cur_data = datetime.datetime.now().strftime("%d.%m.%Y")
+        self.history = {
+            "clients": {},
+            "log": []
+        }
 
-def new_client(connection: socket.socket, *args) -> None:
+    def listen_for_clients(self) -> None:
+        self.socket.listen()
+        print(f"[SERVER RUNNUNG ON {self.host}:{self.port}]")
         while True:
-            data = connection.recv(1024)
+            conn, addr = self.socket.accept()
+            print(f"New client connected: {addr}")
+            thread = threading.Thread(target=self.handle_client, args=(conn,))
+            thread.start()
+
+    def handle_client(self, conn) -> None:
+        with self.lock:
+            self.clients.append(conn)
+        name = conn.recv(1024).decode()
+        with self.lock:
+            self.names[conn] = name
+        message = f"{name} has joined the chat"
+        print(message)
+        self.broadcast(message.encode(), conn)
+        while True:
+            data = conn.recv(1024)
             if not data:
+                with self.lock:
+                    self.clients.remove(conn)
+                    name = self.names[conn]
+                    del self.names[conn]
+                message = f"{name} has left the chat"
+                print(message)
+                self.broadcast(message.encode())
                 break
-            print(f"{data}")
-            connection.sendall(data)
+            cur_time = datetime.datetime.now().strftime("%d.%m.%Y-%H:%M")
+            message = f"{cur_time} {self.names[conn]}|> {data.decode()}"
+            self.history["log"].append(message)
+            self.history["clients"][name] = str(conn)
+            self.save_history(self.history)
+            print(message)
+            self.broadcast(message.encode(), conn)
 
+    def broadcast(self, message, sender=None):
+        with self.lock:
+            for conn in self.clients:
+                if conn != sender:
+                    conn.sendall(message)
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.bind((HOST, PORT))
-    print("Server started")
-    print("Waiting for client request..")
-    s.listen()
-    while True:
-        conn, addr = s.accept()
-        newthread = Thread(target=new_client, args=(conn, addr))
-        newthread.start()
-        print(f"[ACTIVE CONNECTIONS] {active_count() - 1 }")
+    def save_history(self, data):
+        with open(f'server_log{self.cur_data}.json', "w") as f:
+            json.dump(data, f, indent=4)
+
+if __name__ == "__main__":
+    server = ChatServer("127.0.0.1", 12345)
+    server.listen_for_clients()
 
