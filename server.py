@@ -38,17 +38,7 @@ class ChatServer:
         print(message)
         self.broadcast(message.encode(), conn)
         while True:
-            try:
-                data = conn.recv(1024)
-            except:
-                with self.lock:
-                    self.clients.remove(conn)
-                    name = self.names[conn]
-                    del self.names[conn]
-                message = f"{name} has left the chat"
-                print(message)
-                self.broadcast(message.encode())
-                break
+            data = conn.recv(1024)
             if not data:
                 with self.lock:
                     self.clients.remove(conn)

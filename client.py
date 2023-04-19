@@ -14,12 +14,7 @@ class ChatClient:
         
     def receive_messages(self):
         while True:
-            try:
-                data = self.socket.recv(1024)
-            except:
-                print("Connection closed")
-                self.socket.close()
-                break
+            data = self.socket.recv(1024)
             if not data:
                 print("Connection closed")
                 self.socket.close()
