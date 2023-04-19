@@ -1,47 +1,36 @@
-import socket, threading
+import socket
+import threading
 
-HOST = "127.0.0.1"
-PORT = 12345
-
-
-def new_connect(conn: socket.socket) -> None:
-    
-    def get_message() -> None:
+class ChatClient:
+    def __init__(self, host, port) -> None:
+        self.host = host
+        self.port = port
+        self.name = input("Enter your name: ")
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect((self.host, self.port))
+        self.socket.sendall(self.name.encode())
+        self.receive_thread = threading.Thread(target=self.receive_messages)
+        self.receive_thread.start()
+        
+    def receive_messages(self):
         while True:
-            data = conn.recv(1024)
+            try:
+                data = self.socket.recv(1024)
+            except:
+                print("Connection closed")
+                self.socket.close()
+                break
             if not data:
-                print("Connection closed by the server")
+                print("Connection closed")
+                self.socket.close()
                 break
             print(data.decode())
-    
-    def send_message() -> None:
-        user_name = input('What is your name?\n')
-        user_name = '@' + user_name.encode("UTF-8").decode("UTF-8")
-        output_message = user_name.encode()
-        conn.sendall(output_message)
-        print('To exit from chat write ":q" and press "enter"')
-        while True:
-            user_message = input()
-            user_message = user_message.encode("UTF-8").decode("UTF-8")
 
-            if user_message == ':q':
-                conn.sendall(user_message.encode())
-                break
-
-            output_message = f'{user_name}: {user_message}'.encode()
-            conn.sendall(output_message)
-
-    get = threading.Thread(target=get_message)
-    get.start()
-    send = threading.Thread(target=send_message)
-    send.start()
-
-    get.join()
-    send.join()
-    conn.close()
-
+    def send_message(self, message):
+        self.socket.sendall(message.encode())
 
 if __name__ == "__main__":
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((HOST, PORT))
-        new_connect(s)
+    client = ChatClient("127.0.0.1", 12345)
+    while True:
+        message = input()
+        client.send_message(message)
